@@ -26,5 +26,4 @@ The spread measures liquidty. small spread means a high liquidty, and high sprea
 
 Market orders are instant, and therefore consume liquidty, whereas limit orders (conservative) provide liquidty.
 
-The software developed here is the Matching Engine, that essentially processes orders.
-
+The software developed here is the OrderBook within a matching engine, that essentially processes orders.
