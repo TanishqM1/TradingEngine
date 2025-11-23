@@ -31,4 +31,4 @@ trying to finish in ~ 2-3 weeks, with a full trading engine + minimal turn-based
 
 11/23 - OrderBook() implementation and explanation is finished. 
 
-The schema is derived from CodingJesus's ([Orderbook Video](https://www.youtube.com/watch?v=XeLWe0Cx_Lg&t=1258s))
+The schema is derived from CodingJesus's [Orderbook Video](https://www.youtube.com/watch?v=XeLWe0Cx_Lg&t=1258s)
