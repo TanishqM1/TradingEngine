@@ -1,0 +1,3 @@
+cd ../../S/Users/tanis/Desktop/OrderBook
+
+g++ orderbook.cpp -o orderbook -std=c++23 -Wall

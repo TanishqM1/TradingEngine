@@ -13,6 +13,8 @@
 #include <iterator>
 #include <numeric>
 
+using namespace std;
+
 // "Order"s will have two Time Enforcement options.
 enum class OrderType{
     GoodTillCancel,
@@ -50,7 +52,7 @@ class OrderBookLevelInfo{
         bids_(bids) {}
 
         const LevelInfos& GetBids() const { return bids_; }
-        const LevelInfos& GetAsks() const { return asks_;}
+        const LevelInfos& GetAsks() const { return asks_; }
     
     private:
         LevelInfos bids_;
@@ -126,8 +128,8 @@ class OrderModify{
 
     // "const" in this function denotes the function does NOT modify any member variables.
     OrderPointer ToOrderPointer(OrderType type) const {
-        return std::make_shared<Order>(type, GetOrderId(), GetSide(), GetPrice(), GetQuantity());
-    }
+    return std::make_shared<Order>(type, GetSide(), GetPrice(), GetQuantity(), GetOrderId());
+}
 
     private:
         OrderId orderId_;
@@ -362,7 +364,7 @@ class Orderbook{
 
             OrderBookLevelInfo GetOrderInfos() const{
                 // alias for a LevelInfo vector, and we allocate memory in each LevelInfos (orders_ is conservative, we can use asks_ and bids_ if we really wanted to).
-                LevelInfos bidinfos, askinfos;
+                LevelInfos askinfos, bidinfos;
                 bidinfos.reserve(orders_.size());
                 askinfos.reserve(orders_.size());
 
@@ -391,6 +393,13 @@ class Orderbook{
 };
 
 int main(){
+
+    Orderbook GOOG;
+    OrderId orderId = 1;
+    GOOG.AddOrder(std::make_shared<Order>(OrderType::GoodTillCancel, Side::Buy, 100, 10, orderId));
+    cout << "\nOrderbook size: " << GOOG.Size(); // 1
+    GOOG.CancelOrder(orderId);
+    cout << "\nOrderbook size: " << GOOG.Size(); // 0
 
     return 0;
 }
