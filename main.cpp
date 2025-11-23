@@ -214,6 +214,8 @@ class Orderbook{
             while (true){
                 if (bids_.empty() || asks_.empty()){ break;}
                 
+                // this is `Structured Binding Declaration`. asks_.begin() returns an iterator to the first pair, but since we dereference it, it returns the 
+                // PRICE (askprice/bidprice, the key) and the OrderPointers (list of ALL orders at this price) and stores it into the variables as needed.
                 auto&[askPrice, asks] = *asks_.begin();
                 auto&[bidPrice, bids] = *bids_.begin();
             
