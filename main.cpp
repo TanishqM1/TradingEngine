@@ -10,6 +10,7 @@
 #include <format>
 #include <stdexcept>
 #include <memory>
+#include <iterator>
 
 // "Order"s will have two Time Enforcement options.
 enum class OrderType{
@@ -261,11 +262,87 @@ class Orderbook{
             // But, we also need to update the bid and ask at the current price. This is important for FUTURE orders, but ALSO if the order was partially filled, as we need to re-run the engine to continue seeing
             // if it can be filled at a NEW price.
 
-            
+            // essentially, we need to re-set the best bid and ask price(s), after our current order has gone through.
+            if (!bids_.empty()){
+                auto& [_, bids] = *bids_.begin();
+                auto& order = bids.front();
+                // if the type is fill and kill, we ALWAYS want to remove it from the orderbook right away.
+                if (order-> GetOrderType() == OrderType::FillAndKill){
+                    CancelOrder(order->GetOrderId());
+                }
+            }
+
+            if (!asks_.empty()){
+                auto& [_, asks] = *asks_.begin();
+                auto& order = asks.front();
+                if (order-> GetOrderType() == OrderType::FillAndKill){
+                    CancelOrder(order-> GetOrderId());
+                }
+            }
+            return trades; // finally, we can return the trades we JUST accomplished.   
         }
-        
 
+        // need to add, cancel, and modify order(s).
 
+        // Given a new Order (the pointer to it), this method adds it to our orderbook.
+        // it checks if the order already exists, if the order is a fillandkill and can NOT be immediately matched (both cases where we do NOT add).
+        public:
+            Trades AddOrder(OrderPointer order){
+                if (orders_.contains(order->GetOrderId())){ return { };}
+
+                if (order->GetOrderType() == OrderType::FillAndKill && !CanMatch(order->GetSide(), order->GetPrice())){
+                    return { };
+                }
+                
+                // NEED TO UNDERSTAND THIS BETTER.
+                OrderPointers::iterator iterator;
+
+                if (order->GetSide() == Side::Buy){
+                    auto& orders = bids_[order->GetPrice()];
+                    orders.push_back(order);
+                    iterator = std::next(orders.begin(), orders.size()-1);
+                }else{
+                    auto& orders = asks_[order->GetPrice()];
+                    orders.push_back(order);
+                    iterator = std::next(orders.begin(), orders.size()-1);
+                }
+
+                orders_.insert({order->GetOrderId(), OrderEntry{ order, iterator}});
+                return MatchOrders();
+            }
+
+            void CancelOrder(OrderId orderId){
+            if (!orders_.contains(orderId)){
+                return;
+            }
+            const auto& [order, orderIterator] = orders_.at(orderId);
+            orders_.erase(orderId);
+
+            if (order->GetSide() == Side::Sell){
+                auto price = order->GetPrice();
+                auto& orders = asks_.at(price);
+                orders.erase(orderIterator);
+                if (orders.empty()){
+                    asks_.erase(price);
+                }
+            }else{
+                auto price = order->GetPrice();
+                auto& orders = bids_.at(price);
+                orders.erase(orderIterator);
+                if (orders.empty()){
+                    bids_.erase(price);
+                }
+            }}
+
+            Trades MatchOrder(OrderModify order){
+                if (!orders_.contains(order.GetOrderId())){
+                    return { };
+                }
+
+                const auto& [existingOrder, _] = orders_.at(order.GetOrderId());
+                CancelOrder(order.GetOrderId());
+                return AddOrder(order.ToOrderPointer(existingOrder->GetOrderType()));
+            }
 };
 
 int main(){
