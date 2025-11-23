@@ -26,19 +26,9 @@
 
 - Data structures for bids and asks
 
-#### Currently Implemented:
-- Strongly typed enums (OrderType, Side)
-
-- Order object with full fill logic and safety checks
-
-- TradeInfo + Trade aggregation model
-
-- LevelInfo and OrderBookLevelInfo for orderbook snapshots
-
-- Shared pointer–based order storage (OrderPointer, OrderPointers)
-
-- Order modification object (OrderModify)
-
-
 trying to finish in ~ 2-3 weeks, with a full trading engine + minimal turn-based GUI
 (ideally using testing to simulate bids and asks, and mimic how the engine reacts).
+
+11/23 - OrderBook() implementation and explanation is finished. 
+
+The schema is derived from CodingJesus's [Orderbook Video]([Orderbook Video](https://www.youtube.com/watch?v=XeLWe0Cx_Lg&t=1258s))
