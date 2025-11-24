@@ -74,6 +74,7 @@ class Order {
             initialQuantity_(quantity),
             remainingQuantity_(quantity) {}
 
+        // const in the function sig. means it will NOT alter the members (getts and setters, bools).
         OrderId GetOrderId() const { return orderId_; }
         Side GetSide() const { return side_; }
         Price GetPrice() const { return price_; }
