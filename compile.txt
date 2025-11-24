@@ -1,3 +1,5 @@
-cd ../../S/Users/tanis/Desktop/Projects/OrderBook/engine
+cd /S/Users/tanis/Desktop/Projects/OrderBook/backend/engine
 
-g++ orderbook.cpp -o orderbook -std=c++23 -Wall
+g++ Engine.cpp -o orderbook -std=c++23 -Wall
+
+g++ -std=c++20 -O2 -Wall -Wextra server.cpp engine.cpp -lws2_32 -o server.exe

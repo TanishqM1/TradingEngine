@@ -423,50 +423,50 @@ struct Counter{
     }
 };
 
-int main(){
+// int main(){
 
-    // Orderbook GOOG;
-    // OrderId orderId = 1;
-    // GOOG.AddOrder(std::make_shared<Order>(OrderType::GoodTillCancel, Side::Buy, 100, 10, orderId));
-    // cout << "\nOrderbook size: " << GOOG.Size(); // 1
-    // GOOG.CancelOrder(orderId);
-    // cout << "\nOrderbook size: " << GOOG.Size(); // 0
+//     // Orderbook GOOG;
+//     // OrderId orderId = 1;
+//     // GOOG.AddOrder(std::make_shared<Order>(OrderType::GoodTillCancel, Side::Buy, 100, 10, orderId));
+//     // cout << "\nOrderbook size: " << GOOG.Size(); // 1
+//     // GOOG.CancelOrder(orderId);
+//     // cout << "\nOrderbook size: " << GOOG.Size(); // 0
 
-    // manual user input(s) to place a buy.
+//     // manual user input(s) to place a buy.
 
-    // Order: (type, side, price, quantity, orderId)
+//     // Order: (type, side, price, quantity, orderId)
 
-    Orderbook GOOG;
-    Counter ID_Count;
+//     Orderbook GOOG;
+//     Counter ID_Count;
 
-    OrderType type;
-    Side side;
-    Price price;
-    Quantity quantity;
-    OrderId id;
+//     OrderType type;
+//     Side side;
+//     Price price;
+//     Quantity quantity;
+//     OrderId id;
 
-    string input_type;
-    string input_side;
-    string input_quantity;
+//     string input_type;
+//     string input_side;
+//     string input_quantity;
 
-    cout << "\nEnter your InputType ";
-    cin >> input_type;
-    cout << "\nEnter side: ";
-    cin >> input_side;
-    cout << "\nEnter price: ";
-    cin >> price;
-    cout << "\nEnter Quantity ";
-    cin >> quantity;
+//     cout << "\nEnter your InputType ";
+//     cin >> input_type;
+//     cout << "\nEnter side: ";
+//     cin >> input_side;
+//     cout << "\nEnter price: ";
+//     cin >> price;
+//     cout << "\nEnter Quantity ";
+//     cin >> quantity;
 
-    type = setType(input_type);
-    side = setSide(input_side);
-    id = ID_Count.GetNext();
+//     type = setType(input_type);
+//     side = setSide(input_side);
+//     id = ID_Count.GetNext();
 
-    cout << "\nOrderbook size: " << GOOG.Size(); // 0
-    GOOG.AddOrder(make_shared<Order>(type, side, price, quantity, id));
-    cout << "\nOrderbook size: " << GOOG.Size(); // 1
-    GOOG.CancelOrder(id);
-    cout << "\nOrderbook size: " << GOOG.Size(); // 0
+//     cout << "\nOrderbook size: " << GOOG.Size(); // 0
+//     GOOG.AddOrder(make_shared<Order>(type, side, price, quantity, id));
+//     cout << "\nOrderbook size: " << GOOG.Size(); // 1
+//     GOOG.CancelOrder(id);
+//     cout << "\nOrderbook size: " << GOOG.Size(); // 0
 
-    return 0;
-}
+//     return 0;
+// }
