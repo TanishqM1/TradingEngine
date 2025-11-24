@@ -12,6 +12,8 @@
 #include <memory>
 #include <iterator>
 #include <numeric>
+#include <string>
+#include <atomic>
 
 using namespace std;
 
@@ -89,6 +91,7 @@ class Order {
 
             remainingQuantity_ -= quantity; // it has been filled
         }
+
 
         // the reason we need this private section here is because without it, we declare the variables in our public: modifier, but never assign them a type.
     private:
@@ -392,13 +395,78 @@ class Orderbook{
 
 };
 
+OrderType setType(string type){
+    if (type == "goodtillcancel"){
+        return OrderType::GoodTillCancel;
+    }else{
+        return OrderType::FillAndKill;
+    }
+}
+
+Side setSide(string side){
+    if (side == "buy"){
+        return Side::Buy;
+    }else{
+        return Side::Sell;
+    }
+}
+
+static uint64_t count = 0;
+
+struct Counter{
+    uint64_t count = 0;
+
+    uint64_t GetNext(){
+        return ++count;
+    }
+    uint64_t GetCurrent(){
+        return count;
+    }
+};
+
 int main(){
 
+    // Orderbook GOOG;
+    // OrderId orderId = 1;
+    // GOOG.AddOrder(std::make_shared<Order>(OrderType::GoodTillCancel, Side::Buy, 100, 10, orderId));
+    // cout << "\nOrderbook size: " << GOOG.Size(); // 1
+    // GOOG.CancelOrder(orderId);
+    // cout << "\nOrderbook size: " << GOOG.Size(); // 0
+
+    // manual user input(s) to place a buy.
+
+    // Order: (type, side, price, quantity, orderId)
+
     Orderbook GOOG;
-    OrderId orderId = 1;
-    GOOG.AddOrder(std::make_shared<Order>(OrderType::GoodTillCancel, Side::Buy, 100, 10, orderId));
+    Counter ID_Count;
+
+    OrderType type;
+    Side side;
+    Price price;
+    Quantity quantity;
+    OrderId id;
+
+    string input_type;
+    string input_side;
+    string input_quantity;
+
+    cout << "\nEnter your InputType ";
+    cin >> input_type;
+    cout << "\nEnter side: ";
+    cin >> input_side;
+    cout << "\nEnter price: ";
+    cin >> price;
+    cout << "\nEnter Quantity ";
+    cin >> quantity;
+
+    type = setType(input_type);
+    side = setSide(input_side);
+    id = ID_Count.GetNext();
+
+    cout << "\nOrderbook size: " << GOOG.Size(); // 0
+    GOOG.AddOrder(make_shared<Order>(type, side, price, quantity, id));
     cout << "\nOrderbook size: " << GOOG.Size(); // 1
-    GOOG.CancelOrder(orderId);
+    GOOG.CancelOrder(id);
     cout << "\nOrderbook size: " << GOOG.Size(); // 0
 
     return 0;
