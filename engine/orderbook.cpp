@@ -411,8 +411,6 @@ Side setSide(string side){
     }
 }
 
-static uint64_t count = 0;
-
 struct Counter{
     uint64_t count = 0;
 

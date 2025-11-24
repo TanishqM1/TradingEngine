@@ -25,11 +25,14 @@ func Trade(w http.ResponseWriter, r *http.Request) {
 		api.HandleRequestError(w, err)
 		return
 	}
+	// params to send over.
 
 	// now params has all the values from our JSON. We need to send this over to our C++ engine via FFI.
-	// we just need to invoke a method in the C++ code to add the order to a queue (which the CPP code will read from).
-	//  we will add an object containing type (int), side (int), price (int), quantity (int)
 
-	// then, the CPP code will convert it into an "Order" object, and add it to the orderbook.
+	// FLOW:
 
+	// Start Engine
+	// Invoke CreateOrderBook() and allocate all orderbook memory addresses
+	// use name_ to resolve address of books
+	// using the rest of the information and the book address, invoke AddOrder().
 }
