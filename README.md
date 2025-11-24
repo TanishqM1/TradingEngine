@@ -31,7 +31,7 @@ C++ (engine), Go (backend APIs), Next.js (frontend) serving as a mock stock exch
 trying to finish in ~ 2-3 weeks, with a full trading engine + minimal turn-based GUI
 (ideally using testing to simulate bids and asks, and mimic how the engine reacts).
 
-11/23 - OrderBook() implementation and explanation is finished. 
+11/22 - OrderBook() implementation and explanation is finished. 
 
 The schema is derived from CodingJesus's [Orderbook Video](https://www.youtube.com/watch?v=XeLWe0Cx_Lg&t=1258s)
 
@@ -46,3 +46,5 @@ The schema is derived from CodingJesus's [Orderbook Video](https://www.youtube.c
 
 - Make entire program easily runnable, serving as a mock stock exchange with updates on the frontend.
 
+
+11/23 - OrderBook() is finished, Go backend is initialized. Need to implement JSON parsing, error handling, and FFI bridge to C++ on the backned. 
