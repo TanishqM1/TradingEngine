@@ -10,7 +10,7 @@ extern "C"{
         OrderBookAddress book_ptr,
         int orderType,
         int side,
-        uint32_t price,
+        int32_t price,
         uint32_t quantity,
         uint64_t orderId
     )
