@@ -6,7 +6,7 @@ This project is a high-performance, polyglot system designed to serve as a mock 
 
 ## Technologies & Libraries
 
-| Component | Technology | Role | Source |
+| Component | Technology | Role |  |
 | :--- | :--- | :--- | :--- |
 | **Engine Core (C++)** | C++23, `std::unordered_map` | Business-critical low-latency order matching and multi-asset persistence. | |
 | **Server Interface (C++)** | `httplib` | Provides the minimal, high-speed HTTP interface for the Go API to communicate with the engine process. | |
