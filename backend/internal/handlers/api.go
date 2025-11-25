@@ -32,5 +32,6 @@ func Handler(r *chi.Mux) {
 		// We use lowercase "trade" here to match URL best practices
 		router.Post("/trade", Trade)
 		router.Post("/cancel", Cancel)
+		router.Get("/status", Status)
 	})
 }

@@ -393,6 +393,7 @@ class Orderbook{
                     askinfos.push_back(CreateLevelInfos(price, orders));
                 // in the end, bidinfos and askinfos is a vector of the "LevelInfo" object, which stores price-totalquantity pair(s). 
                 // helps us find the liquidity of shares at certain prices, using asks/bids.
+                return OrderBookLevelInfo(askinfos, bidinfos);
             }
 
 };
@@ -533,20 +534,83 @@ void server_cancel(const httplib::Request& req, httplib::Response& res) {
     }
 }
 
-void print_state(const httplib::Request& req, httplib::Response& res){
-    // prints all levels of each orderbook.
+std::string level_infos_to_json(const OrderBookLevelInfo& info, size_t size) {
+    auto convert_levels = [](const LevelInfos& levels, const std::string& type) {
+        std::string json_array = "[";
+        bool first = true;
+        for (const auto& level : levels) {
+            if (!first) {
+                json_array += ",";
+            }
+            json_array += std::format(
+                R"({{"type":"{}", "price":{}, "quantity":{}}})",
+                type, level.price_, level.quantity_
+            );
+            first = false;
+        }
+        json_array += "]";
+        return json_array;
+    };
+
+    return std::format(
+        R"({{"bids":{}, "asks":{}, "size":{}}})",
+        convert_levels(info.GetBids(), "Bid"),
+        convert_levels(info.GetAsks(), "Ask"),
+        size
+    );
+}
+
+// NOTE: This relies on the OrderBookLevelInfo, LevelInfos, Price, and Quantity types being correctly defined earlier in Server.cpp.
+
+std::string all_orderbooks_to_json() {
+    std::string json_output = "{";
+    bool first = true;
+    
+    // MyMap is the global std::unordered_map<string, Orderbook>
+    for (const auto& pair : MyMap) { 
+        if (!first) {
+            json_output += ",";
+        }
+        std::string book_name = pair.first;
+        const Orderbook& book = pair.second;
+
+        // Uses the existing utility to get the JSON for one book
+        std::string book_json_content = level_infos_to_json(book.GetOrderInfos(), book.Size());
+        
+        // Format the book name as the key, and insert the book's JSON content
+        // We remove the outer braces from book_json_content to embed it correctly
+        json_output += std::format(R"("{}":{})", book_name, book_json_content);
+        first = false;
+    }
+    json_output += "}";
+    return json_output;
+}
+
+void server_status(const httplib::Request& req, httplib::Response& res) {
+    try {
+        std::string status_json = all_orderbooks_to_json();
+
+        res.set_content(status_json, "application/json");
+        res.status = 200;
+    } catch (const std::exception& e) {
+        res.status = 500;
+        std::cerr << "Exception in server_status: " << e.what() << std::endl;
+        res.set_content(std::format(R"({{"error":"Engine error getting status: {}"}})", e.what()), "application/json");
+    } catch (...) {
+        res.status = 500;
+        res.set_content(R"({"error":"Unknown internal server error getting status."})", "application/json");
+    }
 }
 
 int main() {
     httplib::Server svr;
-    Orderbook GOOG;
 
     svr.Post("/trade", server_trade);
     svr.Post("/cancel", server_cancel);
+    svr.Get("/status", server_status);
 
     std::cout << "C++ server listening on http://localhost:6060/run\n";
     svr.listen("0.0.0.0", 6060);
 
-    
 }
 

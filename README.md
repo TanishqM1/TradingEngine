@@ -155,10 +155,58 @@ This removes the partially filled order from the book using the `OrderID` genera
     ```
   * **Expected Status:** `200 OK` (Message confirms successful removal).
 
+
+### 4\. Retrieve Engine Status (`GET /order/status`)
+
+This returns all information across all Orderbook's, stock information, and ask(s)/bid(s) at each level.
+
+  * **URL:** `http://localhost:8000/order/status`
+  * **Method:** `GET`
+  * **Body (Raw JSON):**
+    ```json
+    {
+      "AAPL": {
+          "bids": [
+              {
+                  "type": "Bid",
+                  "price": 100,
+                  "quantity": 200
+              }
+          ],
+          "asks": [],
+          "size": 2
+      },
+      "GOOG": {
+          "bids": [
+              {
+                  "type": "Bid",
+                  "price": 100,
+                  "quantity": 200
+              }
+          ],
+          "asks": [],
+          "size": 2
+      },
+      "TSLA": {
+          "bids": [
+              {
+                  "type": "Bid",
+                  "price": 100,
+                  "quantity": 200
+              }
+          ],
+          "asks": [],
+          "size": 2
+      }
+  }
+    ```
+  * **Expected Status:** `200 OK` (Message confirms successful retrieval).
+
 -----
 
 ## Attribution
 
-The fundamental concepts and core algorithm structure for the Orderbook matching engine were derived from the open-source work of **CodingJesus**.
+The fundamental concepts and core algorithm structure for the Orderbook matching engine were derived from the open-source work of **CodingJesus**, with some additional features.
+ Everything else including backend api, server functions, parsing logic, and frontend were built entirely from scratch.
 
   * [Orderbook Video](https://www.youtube.com/watch?v=XeLWe0Cx_Lg&t=1258s)
