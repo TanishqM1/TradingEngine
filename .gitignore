@@ -1,0 +1,100 @@
+# Build artifacts
+*.o
+*.obj
+*.ko
+*.mod.c
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.bin
+*.out
+*.app
+*.ipa
+*.apk
+*.d
+
+# Object files and libraries
+*.lo
+*.la
+*.lai
+*.al
+*.po
+*.pc
+
+# Compiled resource files
+*.res
+*.rc.o
+*.rc.res
+
+# Generated files
+*.gch
+*.pch
+*.idb
+*.pdb
+*.tdb
+*.ilk
+*.aps
+*.bsc
+*.sbr
+*.suo
+*.user
+*.ncb
+*.sdf
+*.ipch
+*.opendb
+*.cachefile
+*.VC.db
+*.VC.opendb
+
+# CMake build files
+/build/
+/CMakeCache.txt
+/CMakeFiles/
+/Makefile
+/cmake_install.cmake
+/CTestTestfile.cmake
+/DartConfiguration.tcl
+/Testing/
+
+# Visual Studio files
+.vs/
+*.sln.docstates
+*.vssscc
+*.vspscc
+*.vsp
+*.vspx
+*.log
+*.bak
+*.old
+*.tmp
+*.temp
+
+# Eclipse files
+.project
+.classpath
+.settings/
+
+# Xcode files
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+
+# Other IDE/Editor files
+*.swp
+*.swo
+*~
+.#*
+*.bak
+*.orig
+*.rej
+*.diff
+*.patch
+*.DS_Store
+Thumbs.db
+
+# Dependency management files (e.g., vcpkg)
+/vcpkg_installed/
+/newfiles

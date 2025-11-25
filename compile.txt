@@ -1,10 +1,26 @@
 cd /S/Users/tanis/Desktop/Projects/OrderBook/backend/engine
 
-1. Compile engine.cpp as a module
-g++ -std=c++23 -O2 -Wall -c Engine.cpp -o Engine.o
 
 
-2. compile and link server.cpp with engine.o
-g++ -std=c++23 -O2 server.cpp Engine.o -lws2_32 -o server.exe
+1. compile and link server
+g++ -std=c++23 -O2 Server.cpp -lws2_32 -o server.exe
 
 ./server.exe
+
+
+**NEW TERMINAL**
+
+cd /S/Users/tanis/Desktop/Projects/OrderBook/backend/cmd/api
+go run main.go
+
+# This example will result in the C++ server assigning a unique ID (1)
+curl -X POST http://localhost:8000/order/trade -H "Content-Type: application/json" -d '{
+    "tradetype": "GTC",
+    "side": "BUY",
+    "price": 100,
+    "quantity": 10,
+    "name": "GOOG"
+}'
+
+# This example will result in the C++ server cancelling (removing) the order if it's present in the orderbook.
+curl -X POST http://localhost:8000/order/cancel -H "Content-Type: application/json" -d '{"orderid": 1}'
