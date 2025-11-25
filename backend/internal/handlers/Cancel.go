@@ -22,12 +22,15 @@ func Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println(params)
+
 	if params.OrderId == 0 {
 		api.HandleRequestError(w, fmt.Errorf("orderId field is required, and cannot be zero"))
 	}
 
 	URL_Values := url.Values{}
 	URL_Values.Set("orderid", strconv.FormatUint(uint64(params.OrderId), 10))
+	URL_Values.Set("book", params.Book)
 
 	client := http.Client{}
 
@@ -57,5 +60,5 @@ func Cancel(w http.ResponseWriter, r *http.Request) {
 		log.Errorf("Failed to cop proxy response body: %v", err)
 	}
 
-	fmt.Println("Attempted to Cancel Order: %d\n", params.OrderId)
+	fmt.Printf("\nAttempted to Cancel Order: %d", params.OrderId)
 }

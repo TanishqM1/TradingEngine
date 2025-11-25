@@ -27,7 +27,8 @@ type AddFields struct {
 }
 
 type CancelFields struct {
-	OrderId int `json::orderID` // OrderId
+	OrderId int    `json::orderID` // OrderId
+	Book    string `json::name`    // book
 }
 
 func writeError(w http.ResponseWriter, message string, code int) {
