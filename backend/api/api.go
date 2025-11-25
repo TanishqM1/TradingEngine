@@ -19,16 +19,16 @@ func GetNextOrderId() uint64 {
 
 // orders need type, side, price, quantity
 type AddFields struct {
-	TradeType string `json::"tradetype"` // GTILLCANCEL or FILLANDKILL
-	Side      string `json::"side"`      // BUY or SELL
-	Price     int    `json::"price"`     // INT
-	Quantity  int    `json::"quantity"`  // INT
-	Name      string `json::"name"`      // NAME
+	TradeType string `json:"tradetype"` // GTILLCANCEL or FILLANDKILL
+	Side      string `json:"side"`      // BUY or SELL
+	Price     int    `json:"price"`     // INT
+	Quantity  int    `json:"quantity"`  // INT
+	Name      string `json:"name"`      // NAME
 }
 
 type CancelFields struct {
-	OrderId int    `json::orderID` // OrderId
-	Book    string `json::name`    // book
+	OrderId int    `json:"orderID"` // OrderId
+	Book    string `json:"name"`    // book
 }
 
 func writeError(w http.ResponseWriter, message string, code int) {

@@ -503,11 +503,28 @@ void server_cancel(const httplib::Request& req, httplib::Response& res) {
     try{
         // parse content
         string s_orderid = req.get_param_value("orderid");
-        string s_type = req.get_param_value("book");
+        string s_book = req.get_param_value("book");
 
-        cout << "\n " << s_orderid << " " << s_type;
+        if (s_orderid.empty() || s_book.empty()){
+            res.status = 400; // Bad Request
+            res.set_content(R"({"error":"Missing required parameters"})", "application/json");
+            return;
+        }
+
+        OrderId id = parse_id(s_orderid);
+        Orderbook& book = MyMap[s_book];
+        size_t before = book.Size();
+        book.CancelOrder(id);
+        size_t after = book.Size();
+
+        if (after < before){
+            cout << "\n " << s_orderid << " " << s_book;
         res.status = 200;
         res.set_content("{\"message\": \"Order Info Received\"}", "application/json");
+        cout << "\n Cancelled OrderID: " << s_orderid << " in book: " << s_book << " new size:  " << book.Size();
+        }else {
+            res.set_content("{\"message\": \"Order ID not found\"}", "application/json");
+        }
     }catch(...){
         res.status = 500;
         res.set_content(R"({"error":"Unknown internal server error."})", "application/json");
