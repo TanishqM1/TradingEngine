@@ -212,6 +212,7 @@ class Orderbook{
                     return price <= bestBid; 
                 }
               }
+              return false;  // unreachable for valid Side enum, but satisfies compiler
           }
 
         // We also need a Match() function that runs when a match actually occurs. 

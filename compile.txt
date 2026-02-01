@@ -3,7 +3,10 @@ cd /S/Users/tanis/Desktop/Projects/OrderBook/backend/engine
 
 
 1. compile and link server
-g++ -std=c++23 -O2 Server.cpp -lws2_32 -o server.exe
+# Windows:
+# g++ -std=c++23 -O2 Server.cpp -lws2_32 -o server.exe
+# macOS/Linux (no extra libs needed):
+g++ -std=c++23 -O2 Server.cpp -o server
 
 ./server.exe
 
