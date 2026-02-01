@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package orderbook;
+
+option go_package = "github.com/TanishqM1/Orderbook/internal/pb";
+
+// Request message for placing a trade
+message TradeRequest {
+  string tradetype = 1;  // GTILLCANCEL or FILLANDKILL
+  string side = 2;       // BUY or SELL
+  int32 price = 3;       // Price
+  int32 quantity = 4;    // Quantity
+  string name = 5;       // Book name
+}
+
+// Request message for canceling an order
+message CancelRequest {
+  uint64 orderid = 1;    // Order ID to cancel
+  string book = 2;       // Book name
+}
+
+// Request message for status check
+message StatusRequest {}
+
+// Generic response for Trade and Cancel operations
+message TradeResponse {
+  uint64 order_id = 1;   // Assigned order ID
+  int32 status_code = 2; // HTTP-like status code
+  string body = 3;       // Response body from C++ engine
+}
+
+message CancelResponse {
+  int32 status_code = 1; // HTTP-like status code
+  string body = 2;       // Response body from C++ engine
+}
+
+// Response for status check
+message StatusResponse {
+  int32 status_code = 1; // HTTP-like status code
+  string body = 2;       // Full orderbook state as JSON string
+}
+
+// OrderService defines the trading engine API
+service OrderService {
+  // Place a new trade order
+  rpc Trade(TradeRequest) returns (TradeResponse);
+  
+  // Cancel an existing order
+  rpc Cancel(CancelRequest) returns (CancelResponse);
+  
+  // Get current orderbook status
+  rpc Status(StatusRequest) returns (StatusResponse);
+}

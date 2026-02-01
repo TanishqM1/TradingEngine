@@ -101,3 +101,5 @@ Thumbs.db
 
 .clangd
 .c_cpp_properties.json
+
+server
