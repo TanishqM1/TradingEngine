@@ -1,29 +1,38 @@
-cd /S/Users/tanis/Desktop/Projects/OrderBook/backend/engine
+Only the Go architecutre can be tested so far (on develop)
+
+# start mock ports with current JSON config (subject to change)
+
+for port in 6060 6061 6062 6063; do
+  python3 -c "
+from http.server import BaseHTTPRequestHandler, HTTPServer
+class H(BaseHTTPRequestHandler):
+    def do_POST(self):
+        l = int(self.headers.get('Content-Length',0))
+        b = self.rfile.read(l).decode()
+        print('[${port}] POST', self.path, '->', b)
+        self.send_response(200); self.end_headers(); self.wfile.write(b'ok')
+HTTPServer(('0.0.0.0', ${port}), H).serve_forever()
+" &
+done
 
 
+# run go server
 
-1. compile and link server
-# Windows:
-# g++ -std=c++23 -O2 Server.cpp -lws2_32 -o server.exe
-# macOS/Linux (no extra libs needed):
-g++ -std=c++23 -O2 Server.cpp -o server
+# Stop the current server (Ctrl+C if running)
+# Then restart:
+cd /Users/tanishq/Work/TradingEngine/backend/cmd/api
+go run .
 
-./server.exe
+# send mock requests. a success message should be logged
 
+# NVDA → should now hit port 6060 (index 0)
+grpcurl -plaintext -d '{"tradetype":"GTILLCANCEL","side":"BUY","name":"NVDA","price":100,"quantity":1}' \
+  localhost:50051 orderbook.OrderService/Trade
 
-**NEW TERMINAL**
+# TSLA → should hit port 6062 (index 2)
+grpcurl -plaintext -d '{"tradetype":"GTILLCANCEL","side":"BUY","name":"TSLA","price":200,"quantity":5}' \
+  localhost:50051 orderbook.OrderService/Trade
 
-cd /S/Users/tanis/Desktop/Projects/OrderBook/backend/cmd/api
-go run main.go
-
-# This example will result in the C++ server assigning a unique ID (1)
-curl -X POST http://localhost:8000/order/trade -H "Content-Type: application/json" -d '{
-    "tradetype": "GTC",
-    "side": "BUY",
-    "price": 100,
-    "quantity": 10,
-    "name": "GOOG"
-}'
-
-# This example will result in the C++ server cancelling (removing) the order if it's present in the orderbook.
-curl -X POST http://localhost:8000/order/cancel -H "Content-Type: application/json" -d '{"orderid": 1}'
+# MSFT → should also hit port 6062 (index 2, shares with TSLA)
+grpcurl -plaintext -d '{"tradetype":"GTILLCANCEL","side":"BUY","name":"MSFT","price":150,"quantity":3}' \
+  localhost:50051 orderbook.OrderService/Trade
