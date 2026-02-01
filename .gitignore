@@ -98,3 +98,6 @@ Thumbs.db
 # Dependency management files (e.g., vcpkg)
 /vcpkg_installed/
 /newfiles
+
+.clangd
+.c_cpp_properties.json
