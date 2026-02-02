@@ -3,7 +3,6 @@ module github.com/TanishqM1/Orderbook
 go 1.25.2
 
 require (
-	github.com/go-chi/chi v1.5.5
 	github.com/sirupsen/logrus v1.9.3
 	google.golang.org/grpc v1.78.0
 	google.golang.org/protobuf v1.36.11

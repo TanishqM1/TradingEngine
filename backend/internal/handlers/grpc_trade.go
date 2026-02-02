@@ -2,11 +2,8 @@ package handlers
 
 import (
 	"context"
-	"io"
-	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/TanishqM1/Orderbook/api"
 	pb "github.com/TanishqM1/Orderbook/internal/pb"
@@ -15,11 +12,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Trade handles the gRPC Trade request
+// Trade handles the gRPC Trade request with minimal latency
+// Critical path: validate -> generate ID -> fire request -> return
+// Logging happens in background after request is already in flight
 func (s *GRPCServer) Trade(ctx context.Context, req *pb.TradeRequest) (*pb.TradeResponse, error) {
-	log.Debugf("Received Trade request: %+v", req)
-
-	// Validate request
+	// Fast validation (only required fields, no expensive checks)
 	if req.Tradetype == "" || req.Side == "" || req.Name == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "tradetype, side, and name fields are required")
 	}
@@ -27,52 +24,31 @@ func (s *GRPCServer) Trade(ctx context.Context, req *pb.TradeRequest) (*pb.Trade
 		return nil, status.Errorf(codes.InvalidArgument, "price and quantity must be positive")
 	}
 
-	// Generate order ID
+	// Generate order ID (atomic increment - ~nanoseconds)
 	orderId := api.GetNextOrderId()
 
-	// Prepare request to C++ engine
-	urlValues := url.Values{}
-	urlValues.Set("orderid", strconv.FormatUint(orderId, 10))
-	urlValues.Set("tradetype", req.Tradetype)
-	urlValues.Set("side", req.Side)
-	urlValues.Set("price", strconv.Itoa(int(req.Price)))
-	urlValues.Set("quantity", strconv.Itoa(int(req.Quantity)))
-	urlValues.Set("book", req.Name)
+	// Build form data (minimal allocations)
+	form := url.Values{}
+	form.Set("orderid", strconv.FormatUint(orderId, 10))
+	form.Set("tradetype", req.Tradetype)
+	form.Set("side", req.Side)
+	form.Set("price", strconv.Itoa(int(req.Price)))
+	form.Set("quantity", strconv.Itoa(int(req.Quantity)))
+	form.Set("book", req.Name)
 
-	reqBody := strings.NewReader(urlValues.Encode())
-	client := http.Client{}
-	cppServerURL := "http://localhost:6060/trade"
+	// FIRE REQUEST IMMEDIATELY (non-blocking, request already in flight)
+	s.balancer.FireTrade(form)
 
-	log.Debugf("Forwarding trade request to C++ engine: %s with body: %s", cppServerURL, urlValues.Encode())
+	// Log in background (after request is already sent)
+	go func() {
+		log.Infof("Trade order fired: ID=%d book=%s side=%s type=%s price=%d qty=%d",
+			orderId, req.Name, req.Side, req.Tradetype, req.Price, req.Quantity)
+	}()
 
-	// Create HTTP request to C++ engine
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", cppServerURL, reqBody)
-	if err != nil {
-		log.Errorf("Failed to create C++ request: %v", err)
-		return nil, status.Errorf(codes.Internal, "failed to create request to C++ engine")
-	}
-	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	// Send request to C++ engine
-	cppResp, err := client.Do(httpReq)
-	if err != nil {
-		log.Errorf("Failed to connect to C++ engine at :6060. Is the C++ server running? Error: %v", err)
-		return nil, status.Errorf(codes.Unavailable, "failed to connect to C++ engine: %v", err)
-	}
-	defer cppResp.Body.Close()
-
-	// Read response body
-	respBody, err := io.ReadAll(cppResp.Body)
-	if err != nil {
-		log.Errorf("Failed to read response body: %v", err)
-		return nil, status.Errorf(codes.Internal, "failed to read C++ engine response")
-	}
-
-	log.Infof("Processed new order with ID: %d", orderId)
-
+	// Return success immediately
 	return &pb.TradeResponse{
 		OrderId:    orderId,
-		StatusCode: int32(cppResp.StatusCode),
-		Body:       string(respBody),
+		StatusCode: 202, // HTTP 202 Accepted
+		Body:       "Order queued",
 	}, nil
 }
