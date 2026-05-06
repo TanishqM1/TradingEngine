@@ -159,8 +159,8 @@ class Trade{
         bidTrade_ { bidTrade},
         askTrade_ { askTrade} {}
 
-        const TradeInfo& GetBidTrade(){return bidTrade_;}
-        const TradeInfo& GetAskTrade(){return askTrade_;}
+        const TradeInfo& GetBidTrade() const {return bidTrade_;}
+        const TradeInfo& GetAskTrade() const {return askTrade_;}
 
     private:
         TradeInfo bidTrade_;
@@ -194,7 +194,7 @@ class Orderbook{
 
         bool CanMatch(Side side, Price price) const{
               if (side == Side::Buy){
-                
+
                 if (asks_.empty()){
                     return false;
                 }else{
@@ -209,9 +209,11 @@ class Orderbook{
                     return false;
                 }else{
                     const auto& [bestBid, _] = *bids_.begin();
-                    return price <= bestBid; 
+                    return price <= bestBid;
                 }
               }
+
+              return false; // Default case (should never reach here)
           }
 
         // We also need a Match() function that runs when a match actually occurs. 
@@ -397,6 +399,38 @@ Trades MatchOrders(){
 
             std::size_t Size() const { return orders_.size();}
 
+            // Clear all orders from the orderbook
+            void Clear() {
+                bids_.clear();
+                asks_.clear();
+                orders_.clear();
+            }
+
+            // Get the best bid and ask prices (-1 if empty)
+            std::pair<Price, Price> GetBestPrices() const {
+                Price bestBid = bids_.empty() ? -1 : bids_.begin()->first;
+                Price bestAsk = asks_.empty() ? -1 : asks_.begin()->first;
+                return {bestBid, bestAsk};
+            }
+
+            // Count remaining bids and asks
+            std::pair<std::size_t, std::size_t> GetOrderCounts() const {
+                std::size_t bidCount = 0;
+                std::size_t askCount = 0;
+                for (const auto& [price, orders] : bids_) {
+                    bidCount += orders.size();
+                }
+                for (const auto& [price, orders] : asks_) {
+                    askCount += orders.size();
+                }
+                return {bidCount, askCount};
+            }
+
+            // Get number of price levels
+            std::pair<std::size_t, std::size_t> GetLevelCounts() const {
+                return {bids_.size(), asks_.size()};
+            }
+
             OrderBookLevelInfo GetOrderInfos() const{
                 // alias for a LevelInfo vector, and we allocate memory in each LevelInfos (orders_ is conservative, we can use asks_ and bids_ if we really wanted to).
                 LevelInfos askinfos, bidinfos;
@@ -486,6 +520,80 @@ Quantity parse_quantity(string quantity){
 Price parse_price(string price){
     return std::stoi(price);
 }
+
+// JSON parsing helpers for batch endpoint
+std::string extract_json_string(const std::string& json, const std::string& key) {
+    std::string search_key = "\"" + key + "\":";
+    size_t key_pos = json.find(search_key);
+    if (key_pos == std::string::npos) return "";
+
+    size_t start = json.find("\"", key_pos + search_key.length());
+    if (start == std::string::npos) return "";
+    start++;
+
+    size_t end = json.find("\"", start);
+    if (end == std::string::npos) return "";
+
+    return json.substr(start, end - start);
+}
+
+int64_t extract_json_number(const std::string& json, const std::string& key) {
+    std::string search_key = "\"" + key + "\":";
+    size_t key_pos = json.find(search_key);
+    if (key_pos == std::string::npos) return 0;
+
+    size_t start = key_pos + search_key.length();
+    // Skip whitespace
+    while (start < json.length() && (json[start] == ' ' || json[start] == '\t')) start++;
+
+    size_t end = start;
+    while (end < json.length() && (isdigit(json[end]) || json[end] == '-')) end++;
+
+    if (start == end) return 0;
+    return std::stoll(json.substr(start, end - start));
+}
+
+std::vector<std::string> extract_json_array(const std::string& json, const std::string& key) {
+    std::vector<std::string> result;
+    std::string search_key = "\"" + key + "\":";
+    size_t key_pos = json.find(search_key);
+    if (key_pos == std::string::npos) return result;
+
+    size_t array_start = json.find("[", key_pos);
+    if (array_start == std::string::npos) return result;
+
+    size_t array_end = json.find("]", array_start);
+    if (array_end == std::string::npos) return result;
+
+    // Parse individual objects in the array
+    size_t pos = array_start + 1;
+    while (pos < array_end) {
+        size_t obj_start = json.find("{", pos);
+        if (obj_start == std::string::npos || obj_start >= array_end) break;
+
+        // Find matching closing brace
+        int brace_count = 1;
+        size_t obj_end = obj_start + 1;
+        while (obj_end < json.length() && brace_count > 0) {
+            if (json[obj_end] == '{') brace_count++;
+            else if (json[obj_end] == '}') brace_count--;
+            obj_end++;
+        }
+
+        if (brace_count == 0) {
+            result.push_back(json.substr(obj_start, obj_end - obj_start));
+        }
+        pos = obj_end;
+    }
+
+    return result;
+}
+
+// Structure to track batch statistics per book
+struct BookStats {
+    int tradesExecuted = 0;
+    int64_t volumeTraded = 0;
+};
 
 
 void server_trade(const httplib::Request& req, httplib::Response& res){
@@ -625,6 +733,7 @@ std::string all_orderbooks_to_json() {
 
 void server_status(const httplib::Request& req, httplib::Response& res) {
     try {
+        std::lock_guard<std::mutex> lock(gLock);
         std::string status_json = all_orderbooks_to_json();
 
         res.set_content(status_json, "application/json");
@@ -639,6 +748,118 @@ void server_status(const httplib::Request& req, httplib::Response& res) {
     }
 }
 
+void server_reset(const httplib::Request& req, httplib::Response& res) {
+    try {
+        std::lock_guard<std::mutex> lock(gLock);
+        size_t count = MyMap.size();
+        MyMap.clear();
+
+        res.status = 200;
+        res.set_content(std::format(R"({{"message":"All orderbooks cleared","booksCleared":{}}})", count), "application/json");
+        std::cout << "\n[RESET] Cleared " << count << " orderbooks" << std::flush;
+    } catch (const std::exception& e) {
+        res.status = 500;
+        std::cerr << "Exception in server_reset: " << e.what() << std::endl;
+        res.set_content(std::format(R"({{"error":"Engine error during reset: {}"}})", e.what()), "application/json");
+    } catch (...) {
+        res.status = 500;
+        res.set_content(R"({"error":"Unknown internal server error during reset."})", "application/json");
+    }
+}
+
+void server_batch(const httplib::Request& req, httplib::Response& res) {
+    try {
+        // Parse the JSON body
+        std::string body = req.body;
+        std::vector<std::string> orders = extract_json_array(body, "orders");
+
+        if (orders.empty()) {
+            res.status = 400;
+            res.set_content(R"({"error":"No orders provided in batch"})", "application/json");
+            return;
+        }
+
+        // Track statistics per book
+        std::unordered_map<std::string, BookStats> bookStats;
+        int processedCount = 0;
+
+        {
+            std::lock_guard<std::mutex> lock(gLock);
+
+            // Process each order
+            for (const auto& orderJson : orders) {
+                OrderId id = static_cast<OrderId>(extract_json_number(orderJson, "orderid"));
+                std::string book = extract_json_string(orderJson, "book");
+                std::string typeStr = extract_json_string(orderJson, "tradetype");
+                std::string sideStr = extract_json_string(orderJson, "side");
+                Price price = static_cast<Price>(extract_json_number(orderJson, "price"));
+                Quantity quantity = static_cast<Quantity>(extract_json_number(orderJson, "quantity"));
+
+                if (book.empty() || id == 0) continue;
+
+                OrderType type = parse_ordertype(typeStr);
+                Side side = parse_side(sideStr);
+
+                Orderbook& orderbook = MyMap[book];
+                Trades trades = orderbook.AddOrder(std::make_shared<Order>(type, side, price, quantity, id));
+
+                // Track statistics
+                BookStats& stats = bookStats[book];
+                stats.tradesExecuted += trades.size();
+                for (const auto& trade : trades) {
+                    stats.volumeTraded += trade.GetBidTrade().quantity_;
+                }
+
+                processedCount++;
+            }
+
+            // Build response JSON with per-book results
+            std::string resultJson = "{";
+            resultJson += std::format(R"("processedCount":{},"results":{{)", processedCount);
+
+            bool first = true;
+            for (const auto& [bookName, book] : MyMap) {
+                if (!first) resultJson += ",";
+                first = false;
+
+                auto [bestBid, bestAsk] = book.GetBestPrices();
+                auto [bidCount, askCount] = book.GetOrderCounts();
+                auto [bidLevels, askLevels] = book.GetLevelCounts();
+
+                // Get stats for this book (may be zero if no orders were for this book)
+                const BookStats& stats = bookStats[bookName];
+
+                resultJson += std::format(
+                    R"("{}":{{"tradesExecuted":{},"volumeTraded":{},"remainingBids":{},"remainingAsks":{},"bestBidPrice":{},"bestAskPrice":{},"bidLevels":{},"askLevels":{}}})",
+                    bookName,
+                    stats.tradesExecuted,
+                    stats.volumeTraded,
+                    bidCount,
+                    askCount,
+                    bestBid,
+                    bestAsk,
+                    bidLevels,
+                    askLevels
+                );
+            }
+
+            resultJson += "}}";
+
+            res.status = 200;
+            res.set_content(resultJson, "application/json");
+            std::cout << "\n[BATCH] Processed " << processedCount << " orders" << std::flush;
+        }
+
+    } catch (const std::exception& e) {
+        res.status = 500;
+        std::cerr << "Exception in server_batch: " << e.what() << std::endl;
+        res.set_content(std::format(R"({{"error":"Engine error during batch processing: {}"}})", e.what()), "application/json");
+    } catch (...) {
+        res.status = 500;
+        res.set_content(R"({"error":"Unknown internal server error during batch processing."})", "application/json");
+    }
+}
+
 int main() {
     // we currently access "MyMap" in all functions, which we know may run concurrently. This can be a race condition (trade + cancel at the same time).
     httplib::Server svr;
@@ -646,8 +867,10 @@ int main() {
     svr.Post("/trade", server_trade);
     svr.Post("/cancel", server_cancel);
     svr.Get("/status", server_status);
+    svr.Post("/reset", server_reset);
+    svr.Post("/batch", server_batch);
 
-    std::cout << "C++ server listening on http://localhost:6060/run\n";
+    std::cout << "C++ server listening on http://localhost:6060\n";
     svr.listen("0.0.0.0", 6060);
 
 }

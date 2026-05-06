@@ -33,5 +33,7 @@ func Handler(r *chi.Mux) {
 		router.Post("/trade", Trade)
 		router.Post("/cancel", Cancel)
 		router.Get("/status", Status)
+		router.Post("/reset", Reset)
+		router.Post("/simulation", Simulation)
 	})
 }
