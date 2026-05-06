@@ -31,6 +31,75 @@ type CancelFields struct {
 	Book    string `json:"name"`    // book
 }
 
+// Simulation configuration for a single stock
+type StockSimConfig struct {
+	Symbol      string `json:"symbol"`
+	NumBids     int    `json:"numBids"`
+	NumAsks     int    `json:"numAsks"`
+	PriceMin    int    `json:"priceMin"`
+	PriceMax    int    `json:"priceMax"`
+	QuantityMin int    `json:"quantityMin"`
+	QuantityMax int    `json:"quantityMax"`
+}
+
+// Full simulation request from frontend
+type SimulationRequest struct {
+	Stocks []StockSimConfig `json:"stocks"`
+}
+
+// Single stock result
+type StockResult struct {
+	Symbol         string `json:"symbol"`
+	TradesExecuted int    `json:"tradesExecuted"`
+	VolumeTraded   int64  `json:"volumeTraded"`
+	RemainingBids  int    `json:"remainingBids"`
+	RemainingAsks  int    `json:"remainingAsks"`
+	BestBidPrice   *int   `json:"bestBidPrice"`
+	BestAskPrice   *int   `json:"bestAskPrice"`
+	BidLevels      int    `json:"bidLevels"`
+	AskLevels      int    `json:"askLevels"`
+}
+
+// Full simulation response to frontend
+type SimulationResponse struct {
+	ExecutionTimeMs      float64       `json:"executionTimeMs"`
+	TotalOrdersProcessed int           `json:"totalOrdersProcessed"`
+	Results              []StockResult `json:"results"`
+}
+
+// Order for batch request to C++
+type BatchOrder struct {
+	OrderId   uint64 `json:"orderid"`
+	Book      string `json:"book"`
+	TradeType string `json:"tradetype"`
+	Side      string `json:"side"`
+	Price     int    `json:"price"`
+	Quantity  int    `json:"quantity"`
+}
+
+// Batch request to C++ engine
+type BatchRequest struct {
+	Orders []BatchOrder `json:"orders"`
+}
+
+// C++ batch response - per book result
+type CppBookResult struct {
+	TradesExecuted int   `json:"tradesExecuted"`
+	VolumeTraded   int64 `json:"volumeTraded"`
+	RemainingBids  int   `json:"remainingBids"`
+	RemainingAsks  int   `json:"remainingAsks"`
+	BestBidPrice   int   `json:"bestBidPrice"`
+	BestAskPrice   int   `json:"bestAskPrice"`
+	BidLevels      int   `json:"bidLevels"`
+	AskLevels      int   `json:"askLevels"`
+}
+
+// C++ batch response
+type CppBatchResponse struct {
+	ProcessedCount int                      `json:"processedCount"`
+	Results        map[string]CppBookResult `json:"results"`
+}
+
 func writeError(w http.ResponseWriter, message string, code int) {
 	resp := Error{
 		Code:    code,

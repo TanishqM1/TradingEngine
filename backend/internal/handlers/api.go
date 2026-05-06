@@ -3,9 +3,23 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/TanishqM1/Orderbook/internal/engine"
+	"github.com/TanishqM1/Orderbook/internal/loadbalancer"
 	"github.com/go-chi/chi"
 	chimiddle "github.com/go-chi/chi/middleware"
 )
+
+// Global distributed components
+var (
+	engineManager *engine.Manager
+	balancer      *loadbalancer.Balancer
+)
+
+// InitDistributed initializes the distributed engine components
+func InitDistributed(em *engine.Manager, b *loadbalancer.Balancer) {
+	engineManager = em
+	balancer = b
+}
 
 func Handler(r *chi.Mux) {
 	// strip trailing slashes (from chi package)
@@ -33,5 +47,9 @@ func Handler(r *chi.Mux) {
 		router.Post("/trade", Trade)
 		router.Post("/cancel", Cancel)
 		router.Get("/status", Status)
+		router.Post("/reset", Reset)
+		router.Post("/simulation", Simulation)
+		router.Get("/health", Health)
+		router.Get("/engines", Engines)
 	})
 }
