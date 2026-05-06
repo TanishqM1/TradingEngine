@@ -1,183 +1,65 @@
-# Orderbook Mock Trading Engine: Low-Latency CLOB Simulator
+# Distributed Trading Engine
 
-This project is a high-performance, polyglot system designed to serve as a mock electronic trading engine, simulating the core components of a real financial exchange's Central Limit Order Book (CLOB). It uses a layered architecture to maximize speed in the core logic while maintaining flexibility in the API layer.
+A high-performance CLOB (Central Limit Order Book) simulator with **distributed processing** - each stock runs on its own dedicated C++ engine instance for parallel order matching.
 
------
+## Quick Start
 
-## Technologies & Libraries
+```bash
+./start.sh
+```
 
-| Component | Technology | Role |  |
-| :--- | :--- | :--- | :--- |
-| **Server Interface (C++)** | `httplib` | Provides the minimal, high-speed HTTP interface for the Go API to communicate with the engine process. | |
-| **API Gateway (Go)** | Go (w/ `go-chi/chi`, `net/http`) | Routing, thread-safe `OrderID` generation, and proxying requests to the C++ engine. | |
+Opens:
+- **Frontend**: http://localhost:3000
+- **API**: http://localhost:8000
+- **C++ Engines**: Spawned dynamically on ports 6060+
 
------
+## Architecture
 
-## Core Engine Features & Concepts
+```
+Frontend (Next.js) → Go API → Multiple C++ Engines (1 per stock)
+```
 
-The core engine models key market concepts and logic:
+When you run a simulation with 4 stocks, 4 separate C++ engine processes are spawned and orders are distributed in parallel.
 
-  * **Limit Order Management:** Handles creation, placement, and persistence of buy and sell orders.
-  * **CLOB Structure:** Maintains separate internal data structures (Bids/Asks) for the book state.
-  * **Priority Matching:** Orders are executed based on **Price–Time Priority** (best price first, then earliest submission time).
-  * **Order Types:** Models **GTC** (Good-Till-Cancel) and **FAK** (Fill-And-Kill) orders.
-  * **Real-World State:** Tracks important metrics like the total quantity at specific **Price Levels** and handles **Partially Filled Orders**.
+## API Endpoints
 
------
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/order/trade` | Place an order |
+| POST | `/order/cancel` | Cancel an order |
+| POST | `/order/simulation` | Run distributed simulation |
+| POST | `/order/reset` | Reset all engines |
+| GET | `/order/status` | Get orderbook state |
+| GET | `/order/health` | Check engine health |
+| GET | `/order/engines` | List running engines |
 
-## Setup & Run Instructions
+## Examples
 
-To run the system, you must compile and start the C++ engine first, followed by the Go API.
+**Place Order:**
+```bash
+curl -X POST http://localhost:8000/order/trade \
+  -H "Content-Type: application/json" \
+  -d '{"tradetype":"GTC","side":"BUY","price":100,"quantity":50,"name":"AAPL"}'
+```
 
-### Phase 1: Run the C++ Orderbook Engine (Port 6060)
+**Run Simulation:**
+```bash
+curl -X POST http://localhost:8000/order/simulation \
+  -H "Content-Type: application/json" \
+  -d '{"stocks":[{"symbol":"AAPL","numBids":100,"numAsks":100,"priceMin":100,"priceMax":200,"quantityMin":10,"quantityMax":100}]}'
+```
 
-1.  **Navigate to the C++ Directory:**
+**Check Health:**
+```bash
+curl http://localhost:8000/order/health
+```
 
-    ```bash
-    cd /S/Users/tanis/Desktop/Projects/OrderBook/backend/engine
-    ```
+## Tech Stack
 
-2.  **Compile the Server:** This command compiles the entire merged engine and server logic.
-
-    ```bash
-    g++ -std=c++23 -O2 Server.cpp -lws2_32 -o server.exe
-    ```
-
-3.  **Run the Server:** Keep this console window **open and running**.
-
-    ```bash
-    ./server.exe
-    ```
-
-    *(Output will confirm listening on port 6060).*
-
-### Phase 2: Run the Go API Proxy (Port 8000)
-
-1.  **Open a NEW Console Window.**
-
-2.  **Navigate to the Go API Directory:**
-
-    ```bash
-    cd /S/Users/tanis/Desktop/Projects/OrderBook/backend/cmd/api
-    ```
-
-3.  **Run the Go Server:**
-
-    ```bash
-    go run main.go
-    ```
-
-    *(Output will confirm listening on port 8000).*
-
------
-
-## API Testing Examples (Postman/cURL)
-
-Direct all requests to the **Go API on Port 8000**. The Go API will handle ID generation and proxy the asset name as the `book` parameter.
-
-### 1\. Place an Order (`POST /order/trade`)
-
-This order creates the first resting **Buy Limit** order for TSLA, setting up the Bid side of the book.
-
-  * **URL:** `http://localhost:8000/order/trade`
-  * **Method:** `POST`
-  * **Body (Raw JSON):**
-    ```json
-    {
-        "tradetype": "GTC", 
-        "side": "BUY", 
-        "price": 100, 
-        "quantity": 100, 
-        "name": "TSLA" 
-    }
-    ```
-  * **Expected Status:** `200 OK`
-
-### 2\. Match an Order (`POST /order/trade`)
-
-This order crosses the spread, immediately matching the resting Buy order from Step 1.
-
-  * **URL:** `http://localhost:8000/order/trade`
-  * **Method:** `POST`
-  * **Body (Raw JSON):**
-    ```json
-    {
-        "tradetype": "GTC", 
-        "side": "SELL", 
-        "price": 99, 
-        "quantity": 50, 
-        "name": "TSLA" 
-    }
-    ```
-  * **Expected Status:** `200 OK`. The JSON response confirms a **Trade** occurred at $100. The original Buy order remains in the book with a remaining quantity of 50.
-
-### 3\. Cancel a Resting Order (`POST /order/cancel`)
-
-This removes the partially filled order from the book using the `OrderID` generated from the first `trade` call (which is likely **1**).
-
-  * **URL:** `http://localhost:8000/order/cancel`
-  * **Method:** `POST`
-  * **Body (Raw JSON):**
-    ```json
-    {
-        "orderid": 1,
-        "book": "TSLA"
-    }
-    ```
-  * **Expected Status:** `200 OK` (Message confirms successful removal).
-
-
-### 4\. Retrieve Engine Status (`GET /order/status`)
-
-This returns all information across all Orderbook's, stock information, and ask(s)/bid(s) at each level.
-
-  * **URL:** `http://localhost:8000/order/status`
-  * **Method:** `GET`
-  * **Body (Raw JSON):**
-    ```json
-    {
-      "AAPL": {
-          "bids": [
-              {
-                  "type": "Bid",
-                  "price": 100,
-                  "quantity": 200
-              }
-          ],
-          "asks": [],
-          "size": 2
-      },
-      "GOOG": {
-          "bids": [
-              {
-                  "type": "Bid",
-                  "price": 100,
-                  "quantity": 200
-              }
-          ],
-          "asks": [],
-          "size": 2
-      },
-      "TSLA": {
-          "bids": [
-              {
-                  "type": "Bid",
-                  "price": 100,
-                  "quantity": 200
-              }
-          ],
-          "asks": [],
-          "size": 2
-      }
-  }
-    ```
-  * **Expected Status:** `200 OK` (Message confirms successful retrieval).
-
------
+- **Frontend**: Next.js, React, Tailwind CSS
+- **API Gateway**: Go (chi router)
+- **Matching Engine**: C++ (httplib)
 
 ## Attribution
 
-The fundamental concepts and core algorithm structure for the Orderbook matching engine were derived from the open-source work of **CodingJesus**, with some additional features.
- Everything else including backend api, server functions, parsing logic, and frontend were built entirely from scratch.
-
-  * [Orderbook Video](https://www.youtube.com/watch?v=XeLWe0Cx_Lg&t=1258s)
+Core orderbook algorithm based on [CodingJesus](https://www.youtube.com/watch?v=XeLWe0Cx_Lg).
