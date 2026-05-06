@@ -860,7 +860,21 @@ void server_batch(const httplib::Request& req, httplib::Response& res) {
     }
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    // Parse port from command line argument, default to 6060
+    int port = 6060;
+    if (argc > 1) {
+        try {
+            port = std::stoi(argv[1]);
+            if (port < 1024 || port > 65535) {
+                std::cerr << "Port must be between 1024 and 65535, using default 6060\n";
+                port = 6060;
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Invalid port argument, using default 6060\n";
+        }
+    }
+
     // we currently access "MyMap" in all functions, which we know may run concurrently. This can be a race condition (trade + cancel at the same time).
     httplib::Server svr;
 
@@ -870,8 +884,7 @@ int main() {
     svr.Post("/reset", server_reset);
     svr.Post("/batch", server_batch);
 
-    std::cout << "C++ server listening on http://localhost:6060\n";
-    svr.listen("0.0.0.0", 6060);
-
+    std::cout << "C++ server listening on http://localhost:" << port << "\n" << std::flush;
+    svr.listen("0.0.0.0", port);
 }
 

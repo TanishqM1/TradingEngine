@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Trading Engine Startup Script
-# Starts C++ Engine, Go API, and Next.js Frontend
+# Distributed Trading Engine Startup Script
+# Compiles C++ Engine and starts Go API + Next.js Frontend
+# C++ engines are spawned dynamically by Go backend (one per stock)
 
 set -e
 
@@ -13,6 +14,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Source common shell profiles to get PATH (for Go, etc.)
@@ -25,7 +27,6 @@ NC='\033[0m' # No Color
 export PATH="$PATH:/usr/local/go/bin:$HOME/go/bin:/opt/homebrew/bin"
 
 # PIDs for cleanup
-CPP_PID=""
 GO_PID=""
 NEXT_PID=""
 
@@ -38,14 +39,18 @@ cleanup() {
     fi
 
     if [ -n "$GO_PID" ] && kill -0 "$GO_PID" 2>/dev/null; then
-        echo -e "${BLUE}Stopping Go API...${NC}"
+        echo -e "${BLUE}Stopping Go API (this will also stop all C++ engines)...${NC}"
         kill "$GO_PID" 2>/dev/null || true
     fi
 
-    if [ -n "$CPP_PID" ] && kill -0 "$CPP_PID" 2>/dev/null; then
-        echo -e "${BLUE}Stopping C++ engine...${NC}"
-        kill "$CPP_PID" 2>/dev/null || true
-    fi
+    # Kill any remaining C++ engines on ports 6060-6099
+    echo -e "${BLUE}Cleaning up any remaining C++ engines...${NC}"
+    for port in $(seq 6060 6099); do
+        pid=$(lsof -ti:$port 2>/dev/null || true)
+        if [ -n "$pid" ]; then
+            kill $pid 2>/dev/null || true
+        fi
+    done
 
     echo -e "${GREEN}All services stopped.${NC}"
     exit 0
@@ -53,9 +58,13 @@ cleanup() {
 
 trap cleanup SIGINT SIGTERM
 
-echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}   Trading Engine Startup Script${NC}"
-echo -e "${BLUE}========================================${NC}"
+echo -e "${CYAN}========================================${NC}"
+echo -e "${CYAN}  Distributed Trading Engine Startup${NC}"
+echo -e "${CYAN}========================================${NC}"
+echo ""
+echo -e "${CYAN}Architecture:${NC}"
+echo -e "  Frontend (Next.js) -> Go API -> Multiple C++ Engines"
+echo -e "  Each stock gets its own dedicated C++ engine instance"
 echo ""
 
 # Check prerequisites
@@ -75,9 +84,6 @@ if ! command -v go &> /dev/null; then
     echo -e "Please install Go from https://go.dev/dl/"
     echo -e "  macOS: brew install go"
     echo -e "  Ubuntu: sudo apt install golang-go"
-    echo -e ""
-    echo -e "After installing, make sure Go is in your PATH:"
-    echo -e "  export PATH=\$PATH:/usr/local/go/bin"
     exit 1
 fi
 
@@ -92,7 +98,7 @@ fi
 echo -e "${GREEN}All prerequisites found!${NC}"
 echo ""
 
-# Step 1: Compile and start C++ Engine
+# Step 1: Compile C++ Engine
 echo -e "${YELLOW}[1/3] Compiling C++ Engine...${NC}"
 cd backend/engine
 
@@ -109,23 +115,19 @@ else
 fi
 
 echo -e "${GREEN}C++ Engine compiled successfully${NC}"
-echo -e "${YELLOW}Starting C++ Engine on port 6060...${NC}"
-./server &
-CPP_PID=$!
-sleep 1
-
-if ! kill -0 "$CPP_PID" 2>/dev/null; then
-    echo -e "${RED}Failed to start C++ Engine${NC}"
-    exit 1
-fi
-echo -e "${GREEN}C++ Engine started (PID: $CPP_PID)${NC}"
+echo -e "${BLUE}Note: C++ engines will be spawned dynamically by Go API (one per stock)${NC}"
 
 cd "$SCRIPT_DIR"
 
 # Step 2: Start Go API
 echo ""
-echo -e "${YELLOW}[2/3] Starting Go API on port 8000...${NC}"
+echo -e "${YELLOW}[2/3] Starting Go API (Distributed Engine Manager) on port 8000...${NC}"
 cd backend/cmd/api
+
+# Set ENGINE_PATH to absolute path of the compiled engine
+export ENGINE_PATH="$SCRIPT_DIR/backend/engine/server"
+echo -e "${BLUE}ENGINE_PATH set to: $ENGINE_PATH${NC}"
+
 go run main.go &
 GO_PID=$!
 sleep 2
@@ -136,6 +138,7 @@ if ! kill -0 "$GO_PID" 2>/dev/null; then
     exit 1
 fi
 echo -e "${GREEN}Go API started (PID: $GO_PID)${NC}"
+echo -e "${BLUE}Go API will spawn C++ engines on ports 6060+ as needed${NC}"
 
 cd "$SCRIPT_DIR"
 
@@ -169,9 +172,21 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}   All services started successfully!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
-echo -e "  ${BLUE}C++ Engine:${NC}    http://localhost:6060"
 echo -e "  ${BLUE}Go API:${NC}        http://localhost:8000"
 echo -e "  ${BLUE}Frontend:${NC}      http://localhost:3000"
+echo -e "  ${BLUE}C++ Engines:${NC}   Spawned dynamically on ports 6060+"
+echo ""
+echo -e "${CYAN}How it works:${NC}"
+echo -e "  1. Configure stocks in the frontend"
+echo -e "  2. Click 'Run Simulation'"
+echo -e "  3. Go API spawns a dedicated C++ engine for each stock"
+echo -e "  4. Orders are distributed across engines in parallel"
+echo -e "  5. Results are aggregated and displayed"
+echo ""
+echo -e "${CYAN}API Endpoints:${NC}"
+echo -e "  GET  /order/health   - Check health of all engines"
+echo -e "  GET  /order/engines  - List all running engines"
+echo -e "  POST /order/simulation - Run distributed simulation"
 echo ""
 echo -e "${YELLOW}Press Ctrl+C to stop all services${NC}"
 echo ""

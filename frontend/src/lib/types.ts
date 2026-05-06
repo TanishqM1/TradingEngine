@@ -32,6 +32,27 @@ export interface SimulationResponse {
   results: StockResult[];
 }
 
+// Engine status types for distributed mode
+export interface EngineStatus {
+  symbol: string;
+  port: number;
+  healthy: boolean;
+  url: string;
+}
+
+export interface HealthResponse {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  totalEngines: number;
+  healthyEngines: number;
+  engines: EngineStatus[];
+}
+
+export interface EnginesResponse {
+  count: number;
+  mapping: Record<string, number>;
+  engines: EngineStatus[];
+}
+
 // Default values for a new stock config
 export const defaultStockConfig: StockSimConfig = {
   symbol: '',

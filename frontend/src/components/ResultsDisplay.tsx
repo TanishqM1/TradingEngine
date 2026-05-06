@@ -13,12 +13,20 @@ export default function ResultsDisplay({ response }: ResultsDisplayProps) {
   const totalVolume = response.results.reduce((sum, r) => sum + r.volumeTraded, 0);
   const totalRemaining = response.results.reduce((sum, r) => sum + r.remainingBids + r.remainingAsks, 0);
   const throughput = Math.round(response.totalOrdersProcessed / (response.executionTimeMs / 1000));
+  const numEngines = response.results.length;
 
   return (
     <div className="space-y-6">
       {/* Performance Summary */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 className="text-sm font-medium text-gray-500 mb-4">Performance Summary</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-medium text-gray-500">Performance Summary</h2>
+          {numEngines > 1 && (
+            <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">
+              {numEngines} distributed engines
+            </span>
+          )}
+        </div>
 
         {/* Main Metric */}
         <div className="text-center mb-6">
@@ -27,7 +35,7 @@ export default function ResultsDisplay({ response }: ResultsDisplayProps) {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-4 gap-4 text-center">
+        <div className="grid grid-cols-5 gap-4 text-center">
           <div>
             <div className="text-xl font-semibold text-gray-900">{response.totalOrdersProcessed.toLocaleString()}</div>
             <div className="text-xs text-gray-500">Orders</div>
@@ -44,13 +52,17 @@ export default function ResultsDisplay({ response }: ResultsDisplayProps) {
             <div className="text-xl font-semibold text-gray-900">{throughput.toLocaleString()}</div>
             <div className="text-xs text-gray-500">Orders/sec</div>
           </div>
+          <div>
+            <div className="text-xl font-semibold text-indigo-600">{numEngines}</div>
+            <div className="text-xs text-gray-500">Engines</div>
+          </div>
         </div>
       </div>
 
       {/* Results by Stock */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-sm font-medium text-gray-500">Results by Stock</h2>
+          <h2 className="text-sm font-medium text-gray-500">Results by Stock (1 Engine per Stock)</h2>
         </div>
 
         {/* Table */}
@@ -124,12 +136,17 @@ export default function ResultsDisplay({ response }: ResultsDisplayProps) {
         </table>
 
         {/* Summary Footer */}
-        <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-xs text-gray-500">
-          {totalRemaining === 0 ? (
-            <span className="text-green-600">All orders matched successfully</span>
-          ) : (
-            <span>{totalRemaining} orders remaining in orderbook</span>
-          )}
+        <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-xs text-gray-500 flex justify-between">
+          <span>
+            {totalRemaining === 0 ? (
+              <span className="text-green-600">All orders matched successfully</span>
+            ) : (
+              <span>{totalRemaining} orders remaining in orderbook</span>
+            )}
+          </span>
+          <span className="text-indigo-600">
+            Processed in parallel across {numEngines} engine{numEngines > 1 ? 's' : ''}
+          </span>
         </div>
       </div>
     </div>

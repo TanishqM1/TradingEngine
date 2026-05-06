@@ -4,21 +4,22 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/rand"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/TanishqM1/Orderbook/api"
+	"github.com/TanishqM1/Orderbook/internal/loadbalancer"
 	log "github.com/sirupsen/logrus"
 )
 
-// Simulation handles the full simulation workflow:
+// Simulation handles the distributed simulation workflow:
 // 1. Parse config from frontend
-// 2. Reset the C++ engine
-// 3. Generate random orders
-// 4. Send batch to C++ engine
-// 5. Return results with timing
+// 2. Spawn engines for each unique stock (one engine per symbol)
+// 3. Generate random orders grouped by symbol
+// 4. Send batches to each engine in parallel
+// 5. Aggregate results and return with timing
 func Simulation(w http.ResponseWriter, r *http.Request) {
 	// Parse simulation request from frontend
 	var params api.SimulationRequest
@@ -35,6 +36,7 @@ func Simulation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate stock configs
+	symbols := make([]string, 0, len(params.Stocks))
 	for _, stock := range params.Stocks {
 		if stock.Symbol == "" {
 			api.HandleRequestError(w, fmt.Errorf("stock symbol cannot be empty"))
@@ -48,39 +50,43 @@ func Simulation(w http.ResponseWriter, r *http.Request) {
 			api.HandleRequestError(w, fmt.Errorf("quantityMin cannot be greater than quantityMax for %s", stock.Symbol))
 			return
 		}
+		symbols = append(symbols, stock.Symbol)
 	}
 
-	client := http.Client{}
+	// Check if distributed mode is available
+	if engineManager == nil || balancer == nil {
+		log.Warn("Distributed mode not initialized, falling back to single engine")
+		simulationSingleEngine(w, params)
+		return
+	}
 
-	// Step 1: Reset the C++ engine
-	resetReq, err := http.NewRequest("POST", "http://localhost:6060/reset", nil)
+	// Step 1: Spawn engines for all symbols in parallel
+	log.Infof("Spawning engines for %d symbols: %v", len(symbols), symbols)
+	engineInfos, err := engineManager.SpawnEnginesForSymbols(symbols)
 	if err != nil {
-		log.Errorf("Failed to create reset request: %v", err)
-		api.HandleInternalError(w)
+		log.Errorf("Failed to spawn some engines: %v", err)
+		// Continue with engines that were spawned successfully
+	}
+
+	if len(engineInfos) == 0 {
+		api.HandleRequestError(w, fmt.Errorf("failed to spawn any engines"))
 		return
 	}
 
-	resetResp, err := client.Do(resetReq)
-	if err != nil {
-		log.Errorf("Failed to reset C++ engine: %v", err)
-		api.HandleInternalError(w)
-		return
-	}
-	resetResp.Body.Close()
+	// Register engines with load balancer
+	mapping := engineManager.GetMapping()
+	balancer.RegisterEngines(mapping)
 
-	if resetResp.StatusCode != 200 {
-		log.Errorf("C++ engine reset failed with status: %d", resetResp.StatusCode)
-		api.HandleInternalError(w)
-		return
-	}
+	// Step 2: Reset all engines in parallel
+	log.Info("Resetting all engines...")
+	resetEnginesParallel(symbols)
 
-	// Step 2: Generate random orders
+	// Step 3: Generate orders grouped by symbol
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	var orders []api.BatchOrder
-	symbolSet := make(map[string]bool) // Track which symbols we're simulating
+	ordersBySymbol := make(map[string][]loadbalancer.BatchOrder)
 
 	for _, stock := range params.Stocks {
-		symbolSet[stock.Symbol] = true
+		var orders []loadbalancer.BatchOrder
 
 		// Generate bid orders
 		for i := 0; i < stock.NumBids; i++ {
@@ -94,7 +100,7 @@ func Simulation(w http.ResponseWriter, r *http.Request) {
 				quantity = stock.QuantityMin + rng.Intn(stock.QuantityMax-stock.QuantityMin+1)
 			}
 
-			orders = append(orders, api.BatchOrder{
+			orders = append(orders, loadbalancer.BatchOrder{
 				OrderId:   api.GetNextOrderId(),
 				Book:      stock.Symbol,
 				TradeType: "GTC",
@@ -116,7 +122,7 @@ func Simulation(w http.ResponseWriter, r *http.Request) {
 				quantity = stock.QuantityMin + rng.Intn(stock.QuantityMax-stock.QuantityMin+1)
 			}
 
-			orders = append(orders, api.BatchOrder{
+			orders = append(orders, loadbalancer.BatchOrder{
 				OrderId:   api.GetNextOrderId(),
 				Book:      stock.Symbol,
 				TradeType: "GTC",
@@ -125,78 +131,56 @@ func Simulation(w http.ResponseWriter, r *http.Request) {
 				Quantity:  quantity,
 			})
 		}
+
+		ordersBySymbol[stock.Symbol] = orders
 	}
 
-	// Step 3: Send batch to C++ engine and time it
-	batchRequest := api.BatchRequest{Orders: orders}
-	batchBody, err := json.Marshal(batchRequest)
-	if err != nil {
-		log.Errorf("Failed to marshal batch request: %v", err)
-		api.HandleInternalError(w)
-		return
+	// Count total orders
+	totalOrders := 0
+	for _, orders := range ordersBySymbol {
+		totalOrders += len(orders)
 	}
 
-	log.Debugf("Sending batch of %d orders to C++ engine", len(orders))
+	log.Infof("Sending %d orders across %d engines in parallel", totalOrders, len(ordersBySymbol))
 
+	// Step 4: Send batches to engines in parallel and time it
 	startTime := time.Now()
 
-	batchReq, err := http.NewRequest("POST", "http://localhost:6060/batch", bytes.NewReader(batchBody))
+	batchResults, err := balancer.ForwardBatchParallel(ordersBySymbol)
 	if err != nil {
-		log.Errorf("Failed to create batch request: %v", err)
-		api.HandleInternalError(w)
-		return
+		log.Warnf("Some batch requests failed: %v", err)
 	}
-	batchReq.Header.Set("Content-Type", "application/json")
-
-	batchResp, err := client.Do(batchReq)
-	if err != nil {
-		log.Errorf("Failed to send batch to C++ engine: %v", err)
-		api.HandleInternalError(w)
-		return
-	}
-	defer batchResp.Body.Close()
 
 	executionTime := time.Since(startTime)
 
-	if batchResp.StatusCode != 200 {
-		body, _ := io.ReadAll(batchResp.Body)
-		log.Errorf("C++ batch processing failed with status %d: %s", batchResp.StatusCode, string(body))
-		api.HandleInternalError(w)
-		return
-	}
-
-	// Step 4: Parse C++ response
-	var cppResponse api.CppBatchResponse
-	err = json.NewDecoder(batchResp.Body).Decode(&cppResponse)
-	if err != nil {
-		log.Errorf("Failed to parse C++ batch response: %v", err)
-		api.HandleInternalError(w)
-		return
-	}
-
-	// Step 5: Transform to frontend response
+	// Step 5: Aggregate results
 	var results []api.StockResult
-	for symbol := range symbolSet {
-		bookResult, exists := cppResponse.Results[symbol]
+	processedCount := 0
 
+	for _, stock := range params.Stocks {
 		result := api.StockResult{
-			Symbol: symbol,
+			Symbol: stock.Symbol,
 		}
 
-		if exists {
-			result.TradesExecuted = bookResult.TradesExecuted
-			result.VolumeTraded = bookResult.VolumeTraded
-			result.RemainingBids = bookResult.RemainingBids
-			result.RemainingAsks = bookResult.RemainingAsks
-			result.BidLevels = bookResult.BidLevels
-			result.AskLevels = bookResult.AskLevels
+		if batchResp, exists := batchResults[stock.Symbol]; exists && batchResp != nil {
+			processedCount += batchResp.ProcessedCount
 
-			// Convert -1 (no price) to nil for JSON
-			if bookResult.BestBidPrice >= 0 {
-				result.BestBidPrice = &bookResult.BestBidPrice
-			}
-			if bookResult.BestAskPrice >= 0 {
-				result.BestAskPrice = &bookResult.BestAskPrice
+			// Get the result for this symbol (there should only be one since each engine handles one symbol)
+			if bookResult, ok := batchResp.Results[stock.Symbol]; ok {
+				result.TradesExecuted = bookResult.TradesExecuted
+				result.VolumeTraded = bookResult.VolumeTraded
+				result.RemainingBids = bookResult.RemainingBids
+				result.RemainingAsks = bookResult.RemainingAsks
+				result.BidLevels = bookResult.BidLevels
+				result.AskLevels = bookResult.AskLevels
+
+				// Convert -1 (no price) to nil for JSON
+				if bookResult.BestBidPrice >= 0 {
+					result.BestBidPrice = &bookResult.BestBidPrice
+				}
+				if bookResult.BestAskPrice >= 0 {
+					result.BestAskPrice = &bookResult.BestAskPrice
+				}
 			}
 		}
 
@@ -205,7 +189,7 @@ func Simulation(w http.ResponseWriter, r *http.Request) {
 
 	response := api.SimulationResponse{
 		ExecutionTimeMs:      float64(executionTime.Microseconds()) / 1000.0,
-		TotalOrdersProcessed: cppResponse.ProcessedCount,
+		TotalOrdersProcessed: processedCount,
 		Results:              results,
 	}
 
@@ -217,6 +201,128 @@ func Simulation(w http.ResponseWriter, r *http.Request) {
 		log.Errorf("Failed to encode simulation response: %v", err)
 	}
 
-	fmt.Printf("\nSimulation complete: %d orders processed in %.2fms\n",
-		len(orders), response.ExecutionTimeMs)
+	fmt.Printf("\nDistributed simulation complete: %d orders across %d engines in %.2fms\n",
+		totalOrders, len(ordersBySymbol), response.ExecutionTimeMs)
+}
+
+// resetEnginesParallel resets all engines in parallel
+func resetEnginesParallel(symbols []string) {
+	var wg sync.WaitGroup
+	for _, symbol := range symbols {
+		wg.Add(1)
+		go func(sym string) {
+			defer wg.Done()
+			if _, err := balancer.ForwardReset(sym); err != nil {
+				log.Warnf("Failed to reset engine for %s: %v", sym, err)
+			}
+		}(symbol)
+	}
+	wg.Wait()
+}
+
+// simulationSingleEngine is the fallback for when distributed mode is not available
+func simulationSingleEngine(w http.ResponseWriter, params api.SimulationRequest) {
+	log.Info("Running simulation in single-engine mode")
+
+	client := http.Client{Timeout: 30 * time.Second}
+
+	// Reset single engine
+	resetResp, err := client.Post("http://localhost:6060/reset", "application/json", nil)
+	if err != nil {
+		log.Errorf("Failed to reset engine: %v", err)
+		api.HandleInternalError(w)
+		return
+	}
+	resetResp.Body.Close()
+
+	// Generate all orders
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	var orders []api.BatchOrder
+
+	for _, stock := range params.Stocks {
+		for i := 0; i < stock.NumBids; i++ {
+			price := stock.PriceMin
+			if stock.PriceMax > stock.PriceMin {
+				price = stock.PriceMin + rng.Intn(stock.PriceMax-stock.PriceMin+1)
+			}
+			quantity := stock.QuantityMin
+			if stock.QuantityMax > stock.QuantityMin {
+				quantity = stock.QuantityMin + rng.Intn(stock.QuantityMax-stock.QuantityMin+1)
+			}
+			orders = append(orders, api.BatchOrder{
+				OrderId:   api.GetNextOrderId(),
+				Book:      stock.Symbol,
+				TradeType: "GTC",
+				Side:      "BUY",
+				Price:     price,
+				Quantity:  quantity,
+			})
+		}
+
+		for i := 0; i < stock.NumAsks; i++ {
+			price := stock.PriceMin
+			if stock.PriceMax > stock.PriceMin {
+				price = stock.PriceMin + rng.Intn(stock.PriceMax-stock.PriceMin+1)
+			}
+			quantity := stock.QuantityMin
+			if stock.QuantityMax > stock.QuantityMin {
+				quantity = stock.QuantityMin + rng.Intn(stock.QuantityMax-stock.QuantityMin+1)
+			}
+			orders = append(orders, api.BatchOrder{
+				OrderId:   api.GetNextOrderId(),
+				Book:      stock.Symbol,
+				TradeType: "GTC",
+				Side:      "SELL",
+				Price:     price,
+				Quantity:  quantity,
+			})
+		}
+	}
+
+	// Send batch
+	batchRequest := api.BatchRequest{Orders: orders}
+	batchBody, _ := json.Marshal(batchRequest)
+
+	startTime := time.Now()
+	resp, err := client.Post("http://localhost:6060/batch", "application/json", bytes.NewReader(batchBody))
+	if err != nil {
+		log.Errorf("Batch request failed: %v", err)
+		api.HandleInternalError(w)
+		return
+	}
+	defer resp.Body.Close()
+	executionTime := time.Since(startTime)
+
+	var cppResponse api.CppBatchResponse
+	json.NewDecoder(resp.Body).Decode(&cppResponse)
+
+	// Build response
+	var results []api.StockResult
+	for _, stock := range params.Stocks {
+		result := api.StockResult{Symbol: stock.Symbol}
+		if bookResult, exists := cppResponse.Results[stock.Symbol]; exists {
+			result.TradesExecuted = bookResult.TradesExecuted
+			result.VolumeTraded = bookResult.VolumeTraded
+			result.RemainingBids = bookResult.RemainingBids
+			result.RemainingAsks = bookResult.RemainingAsks
+			result.BidLevels = bookResult.BidLevels
+			result.AskLevels = bookResult.AskLevels
+			if bookResult.BestBidPrice >= 0 {
+				result.BestBidPrice = &bookResult.BestBidPrice
+			}
+			if bookResult.BestAskPrice >= 0 {
+				result.BestAskPrice = &bookResult.BestAskPrice
+			}
+		}
+		results = append(results, result)
+	}
+
+	response := api.SimulationResponse{
+		ExecutionTimeMs:      float64(executionTime.Microseconds()) / 1000.0,
+		TotalOrdersProcessed: cppResponse.ProcessedCount,
+		Results:              results,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }

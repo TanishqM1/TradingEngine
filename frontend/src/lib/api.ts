@@ -1,4 +1,4 @@
-import { SimulationRequest, SimulationResponse } from './types';
+import { SimulationRequest, SimulationResponse, HealthResponse, EnginesResponse } from './types';
 
 const API_BASE = 'http://localhost:8000/order';
 
@@ -34,6 +34,26 @@ export async function getStatus(): Promise<Record<string, unknown>> {
 
   if (!response.ok) {
     throw new Error('Failed to get status');
+  }
+
+  return response.json();
+}
+
+export async function getHealth(): Promise<HealthResponse> {
+  const response = await fetch(`${API_BASE}/health`);
+
+  if (!response.ok) {
+    throw new Error('Failed to get health status');
+  }
+
+  return response.json();
+}
+
+export async function getEngines(): Promise<EnginesResponse> {
+  const response = await fetch(`${API_BASE}/engines`);
+
+  if (!response.ok) {
+    throw new Error('Failed to get engines');
   }
 
   return response.json();
